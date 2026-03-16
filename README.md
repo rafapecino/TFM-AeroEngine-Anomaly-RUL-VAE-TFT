@@ -15,15 +15,4 @@ El objetivo es desarrollar un framework robusto que combine la detección de ano
 - **Uncertainty Quantification:** Implementación de Monte Carlo Dropout para intervalos de confianza en tiempo real.
 - **XAI (Explainable AI):** Interpretabilidad local y global mediante valores SHAP y mecanismos de atención.
 
-## 🛠 Estructura del Proyecto
-```text
-├── data/               # Scripts de descarga y preprocesamiento de C-MAPSS
-├── models/             # Definiciones de arquitecturas (VAE, TFT, CNN-LSTM)
-├── notebooks/          # Experimentos iniciales y visualización
-├── src/                # Scripts de entrenamiento, validación y evaluación
-│   ├── preprocessing.py
-│   ├── trainer.py
-│   └── metrics.py      # Implementación de la NASA Scoring Function
-├── tests/              # Tests unitarios para las capas de la red
-├── results/            # Pesos de modelos y logs de Ablation Studies
-└── README.md
+
