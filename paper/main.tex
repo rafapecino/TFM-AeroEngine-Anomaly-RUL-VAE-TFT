@@ -41,7 +41,7 @@
     country={Spain}}
 
 \begin{abstract}
-Predictive maintenance of aircraft engines requires both early anomaly detection and accurate remaining useful life (RUL) estimation. Existing data-driven approaches treat these as separate tasks, providing either window-by-window anomaly flags or a single RUL value, but rarely a quantified operational signal that links the two. We propose a hierarchical system in which a one-dimensional convolutional variational autoencoder (Conv1D-VAE) acts as a quantified gate: when the reconstruction error exceeds a calibrated threshold with a persistence rule, a deep RUL regressor (either a CNN+LSTM or a Transformer, evaluated as alternatives rather than as an ensemble) is invoked, and its output is reported with epistemic uncertainty estimated via Monte Carlo Dropout. We evaluate the system on the four C-MAPSS sub-datasets (FD001--FD004) with $N_{\mathrm{seeds}}=10$ deterministic runs, 95\,\% bootstrap confidence intervals and paired Wilcoxon tests. The proposed system achieves a mean lead time of 33--56\,cycles between the gating trigger and engine failure, a systemic true positive rate of 80--100\,\% and a systemic false alarm rate of 5--22\,\% under the optimal configuration ($\tau{=}P_{99}$). In the critical zone (RUL\,$\le$\,30\,cycles) the RUL error is 5.4--10.1\,cycles; we report this critical-zone error as an absolute operational figure rather than as an improvement over the test\textsubscript{last} RMSE, since the two are computed on different RUL distributions and are not directly comparable. On the two multi-regime datasets (FD002, FD004) our best per-dataset regressor matches or improves on the published test\textsubscript{last} RMSE, while on the single-regime datasets it remains 2.5--4\,cycles above the best reported values. The paper contributes (i)~a formal definition of systemic-level metrics for hierarchical PHM systems, (ii)~an ablation over threshold percentiles and persistence requirements that quantifies the trigger-rate vs.\ false-alarm trade-off, and (iii)~a reproducible pipeline released with deterministic seeds, run logs and SHA-256 hashes.
+Predictive maintenance of aircraft engines requires both early anomaly detection and accurate remaining useful life (RUL) estimation. Existing data-driven approaches treat these as separate tasks, providing either window-by-window anomaly flags or a single RUL value, but rarely a quantified operational signal that links the two. We propose a hierarchical system in which a one-dimensional convolutional variational autoencoder (Conv1D-VAE) acts as a quantified gate: when the reconstruction error exceeds a calibrated threshold with a persistence rule, a deep RUL regressor (either a CNN+LSTM or a Transformer, evaluated as alternatives rather than as an ensemble) is invoked, and its output is reported with epistemic uncertainty estimated via Monte Carlo Dropout. We evaluate the system on the four C-MAPSS sub-datasets (FD001--FD004) with $N_{\mathrm{seeds}}=10$ deterministic runs, 95\,\% bootstrap confidence intervals and paired Wilcoxon tests. The proposed system achieves a mean lead time of 33--56\,cycles between the gating trigger and engine failure, a system-level true positive rate of 80--100\,\% and a system-level false alarm rate of 5--22\,\% under the optimal configuration ($\tau{=}P_{99}$). In the critical zone (RUL\,$\le$\,30\,cycles) the RUL error is 5.4--10.1\,cycles; we report this critical-zone error as an absolute operational figure rather than as an improvement over the test\textsubscript{last} RMSE, since the two are computed on different RUL distributions and are not directly comparable. On the two multi-regime datasets (FD002, FD004) our best per-dataset regressor matches or improves on the published test\textsubscript{last} RMSE, while on the single-regime datasets it remains 2.5--4\,cycles above the best reported values. The paper contributes (i)~a formal definition of system-level metrics for hierarchical PHM systems, (ii)~an ablation over threshold percentiles and persistence requirements that quantifies the trigger-rate vs.\ false-alarm trade-off, and (iii)~a reproducible pipeline released with deterministic seeds, run logs and SHA-256 hashes.
 \end{abstract}
 
 \begin{keyword}
@@ -73,7 +73,7 @@ This work proposes and evaluates a hierarchical anomaly-to-RUL system that expli
 {\sloppy
 \begin{enumerate}
     \item A \emph{detector-agnostic} hierarchical gating layer that turns any window-level anomaly scorer into a quantified trigger with a calibrated threshold and a persistence rule; we instantiate it with a Conv1D-VAE that preserves temporal structure and show it is competitive with classical unsupervised detectors while additionally providing a latent degradation representation (Section~\ref{sec:method-vae}, Table~\ref{tab:detbaselines}).
-    \item A formal definition of system-level metrics: systemic true positive rate ($\mathrm{TPR}_{\mathrm{sys}}$), systemic false alarm rate ($\mathrm{FAR}_{\mathrm{sys}}$), lead time (cycles between trigger and failure), and \emph{RMSE@critical} (RMSE evaluated only on windows with RUL\,$\le$\,30) which is comparable across models and datasets (Section~\ref{sec:method-metrics}).
+    \item A formal definition of system-level metrics: system-level true positive rate ($\mathrm{TPR}_{\mathrm{sys}}$), system-level false alarm rate ($\mathrm{FAR}_{\mathrm{sys}}$), lead time (cycles between trigger and failure), and \emph{RMSE@critical} (RMSE evaluated only on windows with RUL\,$\le$\,30) which is comparable across models and datasets (Section~\ref{sec:method-metrics}).
     \item A complete reproducible pipeline with deterministic training algorithms (MC Dropout inference remains stochastic by design), $N_{\mathrm{seeds}}{=}10$ runs, bootstrap 95\,\% CIs, paired Wilcoxon tests and a run-log JSON with SHA-256 hashes covering model weights, data splits, configuration and aggregated metrics (Section~\ref{sec:exp-repro}).
     \item An ablation over threshold percentiles ($\tau\in\{P_{85},\ldots,P_{99}\}$), persistence values ($p\in\{1,2,3,5\}$) and VAE architecture (FC vs.\ Conv1D) that quantifies the operational trade-off and reveals $\tau{=}P_{99}$ as optimal across all four datasets (Section~\ref{sec:results-ablation}).
 \end{enumerate}
@@ -261,7 +261,7 @@ These two values are not comparable: they are computed on different subsets and 
 
 \subsection{Preprocessing}\label{sec:exp-preproc}
 
-For FD001 and FD003 (single regime), a global min--max scaler is fitted on the training split. For FD002 and FD004 (six regimes), KMeans with $k{=}6$ is fitted on the operating-condition signals of the training split, and a separate min--max scaler is fitted per cluster. Both the KMeans labels and the per-regime statistics are obtained exclusively on the training split, and only applied to the validation/test data (no leakage). Constant sensors with variance below $10^{-6}$ are removed; the remaining features are selected by the absolute Spearman correlation between sensor and linear RUL on the training set, with a threshold of 0.10 for FD001/FD003 and 0.05 for the more noisy FD002/FD004.
+For FD001 and FD003 (single regime), a global min--max scaler is fitted on the training split. For FD002 and FD004 (six regimes), KMeans with $k{=}6$ is fitted on the operating-condition signals of the training split, and a separate min--max scaler is fitted per cluster. Both the KMeans labels and the per-regime statistics are obtained exclusively on the training split, and only applied to the validation/test data (no leakage). Constant sensors with variance below $10^{-6}$ are removed (6 on FD001, 5 on FD003, none on FD002/FD004); the remaining features are selected by the absolute Spearman correlation between sensor and linear RUL on the training set, retaining 15 sensors on FD001 and FD002 and 11 on FD003 and FD004. We use a correlation threshold of 0.10 for the single-regime datasets (FD001/FD003) and a lower 0.05 for the six-regime datasets (FD002/FD004): in the multi-regime case the pooled sensor--RUL correlation is attenuated, because a sensor that is informative \emph{within} each operating regime can exhibit a low coefficient once the six regimes are mixed, so a lower threshold is required to retain those sensors.
 
 \subsection{Sliding windows and splits}\label{sec:exp-windows}
 
@@ -270,8 +270,33 @@ A window size of $w{=}30$ cycles is used (consistent with~\citep{li2018remaining
 \subsection{Reproducibility and statistical protocol}\label{sec:exp-repro}
 
 \begin{sloppypar}
-All experiments are run with $\mathrm{SEED}{=}42$. The Python, NumPy, PyTorch and CUDA seeds are fixed. \texttt{torch.use\_deterministic\_algorithms(True)} and \texttt{cudnn.deterministic=True} are activated, and the DataLoader uses a per-worker seed function and a seeded \texttt{torch.Generator}. Each deep regressor is trained $N_{\mathrm{seeds}}{=}10$ times with seeds $\{42,43,\dots,51\}$, yielding a sample of 10 RMSE / NASA / RMSE@critical values per dataset. All aggregated metrics are reported as mean and 95\,\% bootstrap-percentile confidence interval (2000 resamples). Pairwise comparisons between CNN+LSTM and Transformer use the two-sided paired Wilcoxon signed-rank test. The full configuration, seeds, version of every dependency and aggregated metrics are saved to a \texttt{run\_log.json} with a SHA-256 hash, enabling exact reproduction.
+All experiments are run with $\mathrm{SEED}{=}42$. The Python, NumPy, PyTorch and CUDA seeds are fixed. \texttt{torch.use\_deterministic\_algorithms(True)} and \texttt{cudnn.deterministic=True} are activated, and the DataLoader uses a per-worker seed function and a seeded \texttt{torch.Generator}. Each deep regressor is trained $N_{\mathrm{seeds}}{=}10$ times with seeds $\{42,43,\dots,51\}$, yielding a sample of 10 RMSE / NASA / RMSE@critical values per dataset. All aggregated metrics are reported as mean and 95\,\% bootstrap-percentile confidence interval (2000 resamples). Pairwise comparisons between CNN+LSTM and Transformer use the two-sided paired Wilcoxon signed-rank test. The full configuration, seeds, version of every dependency and aggregated metrics are saved to a \texttt{run\_log.json} with a SHA-256 hash, enabling exact reproduction. The hyperparameters of every model are summarised in Table~\ref{tab:hyper}; training used a single NVIDIA GPU (Google Colab, PyTorch~2.11 / CUDA~12.8).
 \end{sloppypar}
+
+\begin{table}[!t]
+\centering
+\caption{Model hyperparameters. Common to all deep models: window $w{=}30$, RUL cap $125$, batch size $256$, gradient clipping at norm $1.0$, ReduceLROnPlateau (factor $0.5$, patience $4$), MC Dropout $T{=}50$.}
+\label{tab:hyper}
+\small
+\begin{tabular}{ll}
+\toprule
+Model & Hyperparameters \\
+\midrule
+Conv1D-VAE & enc.\ channels 32/64/128 (kernels 5/5/3, two stride-2), \\
+           & latent 16, $\beta{=}0.1$, Adam lr $10^{-3}$, 80 epochs \\
+\midrule
+CNN+LSTM   & conv 32/64 (kernel 5, dropout 0.2), LSTM hidden 64 \\
+           & ($\times$2 layers), head 64$\to$32$\to$1, AdamW lr $10^{-3}$, \\
+           & weight decay $10^{-4}$, $\le$60 epochs, early stop (patience 8) \\
+\midrule
+Transformer & $d_{\mathrm{model}}{=}64$, 4 heads, FF 128, 2 layers, GELU, \\
+            & dropout 0.2, AdamW lr $5{\times}10^{-4}$, wd $10^{-4}$, $\le$60 epochs \\
+\midrule
+Random Forest & 200 trees, max depth 15, min samples leaf 5, \\
+              & $7d$ window features (single seed) \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 %% =====================================================================
 \section{Results}\label{sec:results}
@@ -445,7 +470,7 @@ FD004 & Conv1D & $P_{99}$ & 2 & 94.3\,\%  & 21.5\,\%          & 55.8 \\
 \end{tabular}
 \end{table}
 
-The system delivers a mean lead time of 33 to 56\,cycles between trigger and engine failure, with a critical-zone TPR of 80--100\,\%. The systemic FAR is 5.3\,\% on FD001 (single regime) but rises to 17--23\,\% on the multi-regime datasets, a known limitation of regime-agnostic VAEs that we discuss in Section~\ref{sec:limitations}.
+The system delivers a mean lead time of 33 to 56\,cycles between trigger and engine failure, with a critical-zone TPR of 80--100\,\%. The system-level FAR is 5.3\,\% on FD001 (single regime) but rises to 17--23\,\% on the multi-regime datasets, a known limitation of regime-agnostic VAEs that we discuss in Section~\ref{sec:limitations}.
 
 \begin{table}[!t]
 \centering
@@ -530,7 +555,7 @@ Three limitations should be discussed openly.
 
 (i)~An exploratory Cox-based DeepSurv variant was evaluated during development but is \emph{not part of the proposed system}: with last-window engineered features it did not produce a useful survival ranking, which we attribute to those features carrying little information about full lifetime. It is mentioned here only for completeness and transparency; a redesign with a Breslow estimator and multi-window features is a possible future extension rather than a limitation of the system reported in this paper.
 
-(ii)~The systemic FAR is 17--23\,\% on the multi-regime datasets. This is acceptable for an alarm-with-confirmation deployment but high for fully automated decisions. A regime-conditional VAE (one threshold per regime) is the most likely route to reduce it.
+(ii)~The system-level FAR is 17--23\,\% on the multi-regime datasets. This is acceptable for an alarm-with-confirmation deployment but high for fully automated decisions. A regime-conditional VAE (one threshold per regime) is the most likely route to reduce it.
 
 (iii)~The raw MC Dropout coverage degrades on FD002 and FD004 (PICP\,$\le$\,75\,\%, ECE\,$\ge$\,0.11). This is addressed by the post-hoc $\hat\sigma$-scaling of Section~\ref{sec:results-mc}, which restores PICP to 90--95\,\% and lowers ECE below 0.07 (Table~\ref{tab:recal}); a per-regime recalibration that avoids the single-factor compromise on multi-regime data remains for future work.
 
