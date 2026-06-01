@@ -41,7 +41,7 @@
     country={Spain}}
 
 \begin{abstract}
-Predictive maintenance of aircraft engines requires both early anomaly detection and accurate remaining useful life (RUL) estimation. Existing data-driven approaches treat these as separate tasks, providing either window-by-window anomaly flags or a single RUL value, but rarely a quantified operational signal that links the two. We propose a hierarchical system in which a one-dimensional convolutional variational autoencoder (Conv1D-VAE) acts as a quantified gate: when the reconstruction error exceeds a calibrated threshold with a persistence rule, a deep RUL regressor (CNN+LSTM and Transformer) is invoked, and its output is reported with epistemic uncertainty estimated via Monte Carlo Dropout. We evaluate the system on the four C-MAPSS sub-datasets (FD001--FD004) with $N_{\mathrm{seeds}}=10$ deterministic runs, 95\,\% bootstrap confidence intervals and paired Wilcoxon tests. The proposed system achieves a mean lead time of 33--56\,cycles between the gating trigger and engine failure, a systemic true positive rate of 80--100\,\% and a systemic false alarm rate of 5--22\,\% under the optimal configuration ($\tau{=}P_{99}$). The conditional RUL error in the critical zone (RUL\,$\le$\,30\,cycles) is reduced to 5.4--10.1\,cycles, four to seven times lower than the trajectory-wide error, and matches or beats the state of the art in FD002 and FD004. The paper contributes (i)~a formal definition of systemic-level metrics for hierarchical PHM systems, (ii)~an ablation over threshold percentiles and persistence requirements that quantifies the trigger-rate vs.\ false-alarm trade-off, and (iii)~a reproducible pipeline released with deterministic seeds, run logs and SHA-256 hashes.
+Predictive maintenance of aircraft engines requires both early anomaly detection and accurate remaining useful life (RUL) estimation. Existing data-driven approaches treat these as separate tasks, providing either window-by-window anomaly flags or a single RUL value, but rarely a quantified operational signal that links the two. We propose a hierarchical system in which a one-dimensional convolutional variational autoencoder (Conv1D-VAE) acts as a quantified gate: when the reconstruction error exceeds a calibrated threshold with a persistence rule, a deep RUL regressor (either a CNN+LSTM or a Transformer, evaluated as alternatives rather than as an ensemble) is invoked, and its output is reported with epistemic uncertainty estimated via Monte Carlo Dropout. We evaluate the system on the four C-MAPSS sub-datasets (FD001--FD004) with $N_{\mathrm{seeds}}=10$ deterministic runs, 95\,\% bootstrap confidence intervals and paired Wilcoxon tests. The proposed system achieves a mean lead time of 33--56\,cycles between the gating trigger and engine failure, a systemic true positive rate of 80--100\,\% and a systemic false alarm rate of 5--22\,\% under the optimal configuration ($\tau{=}P_{99}$). In the critical zone (RUL\,$\le$\,30\,cycles) the RUL error is 5.4--10.1\,cycles; we report this critical-zone error as an absolute operational figure rather than as an improvement over the test\textsubscript{last} RMSE, since the two are computed on different RUL distributions and are not directly comparable. On the two multi-regime datasets (FD002, FD004) our best per-dataset regressor matches or improves on the published test\textsubscript{last} RMSE, while on the single-regime datasets it remains 2.5--4\,cycles above the best reported values. The paper contributes (i)~a formal definition of systemic-level metrics for hierarchical PHM systems, (ii)~an ablation over threshold percentiles and persistence requirements that quantifies the trigger-rate vs.\ false-alarm trade-off, and (iii)~a reproducible pipeline released with deterministic seeds, run logs and SHA-256 hashes.
 \end{abstract}
 
 \begin{keyword}
@@ -53,7 +53,7 @@ Remaining useful life \sep Predictive maintenance \sep Variational autoencoder \
 %% =====================================================================
 \section{Introduction}\label{sec:intro}
 
-Prognostic technologies are increasingly central to modern aviation. In aircraft engines this is a strong requirement, since their life cycle is subjected to operating regimes that cause progressive degradation and ultimately to failure. For this reason, modern engines are equipped with sensors that record temperature, pressure and rotational-speed signals, providing a multivariate stream from which the deterioration process can be inferred. Traditional preventive or corrective maintenance strategies~\citep{azadeh2015condition} are increasingly unable to meet the growing industrial demand for efficiency and reliability. The economic pressure on commercial aviation is acute: the {IATA} 2026 outlook~\citep{iata2026outlook} flags delivery delays and decarbonisation costs as headwinds for airline profitability, the {ICAO} 2026--2028 business plan~\citep{icao2026plan} explicitly lists data-driven safety oversight among its strategic priorities, and industry analyses of the predictive-maintenance market for aviation fleets~\citep{oxmaint2026market} project double-digit growth driven precisely by AI-enabled prognostic services. The regulator side has also moved: the European Union Aviation Safety Agency has published the second iteration of its AI roadmap~\citep{easa2025roadmap}, which conditions the adoption of machine-learning models in safety-critical aviation contexts to traceability, uncertainty reporting and reproducibility -- requirements that any RUL system aiming for deployment must satisfy.
+Prognostic technologies are increasingly central to modern aviation. In aircraft engines this is a strong requirement, since their life cycle is subjected to operating regimes that cause progressive degradation and ultimately to failure. For this reason, modern engines are equipped with sensors that record temperature, pressure and rotational-speed signals, providing a multivariate stream from which the deterioration process can be inferred. Traditional preventive or corrective maintenance strategies~\citep{azadeh2015condition} are increasingly unable to meet the growing industrial demand for efficiency and reliability. The economic pressure on commercial aviation is acute: the {IATA} 2026 outlook~\citep{iata2026outlook} flags delivery delays and decarbonisation costs as headwinds for airline profitability, and the {ICAO} 2026--2028 business plan~\citep{icao2026plan} explicitly lists data-driven safety oversight among its strategic priorities. The regulator side has also moved: the European Union Aviation Safety Agency has published the second iteration of its AI roadmap~\citep{easa2025roadmap}, which conditions the adoption of machine-learning models in safety-critical aviation contexts to traceability, uncertainty reporting and reproducibility -- requirements that any RUL system aiming for deployment must satisfy.
 
 Prognostics and health management (PHM) techniques~\citep{tian2012artificial,xu2021machine} have therefore matured into a standard tool for industries such as aeronautics, in which Remaining Useful Life (RUL) estimation~\citep{si2011remaining} has become a key element to plan maintenance, extend flight time and avoid unscheduled events.
 
@@ -65,16 +65,16 @@ A parallel line of work uses autoencoders for unsupervised diagnosis. \citet{cos
 
 \subsection{Limitations of current approaches}\label{sec:limits}
 
-Despite remarkable RMSE improvements, three limitations remain. First, anomaly detection and RUL estimation are typically reported as independent metrics. Most papers either report ROC-AUC for anomaly flags or RMSE for RUL prediction, but not both as part of a single decision pipeline that a maintenance operator could deploy. Second, the canonical RMSE on the test\textsubscript{last} window~\citep{li2018remaining} averages over a flat region of high-RUL ``healthy'' samples (capped at 125\,cycles) and a much smaller critical region (RUL\,$\le$\,30): a small RMSE on this aggregate metric does not imply small error in the operationally meaningful zone. Third, the few systems that combine an anomaly detector with a regressor (e.g., trigger the regressor only after a flag) report ``conditional'' metrics evaluated on a non-stationary subset that is incomparable with the trajectory-wide metric, leading to unintentional metric leakage.
+Despite remarkable RMSE improvements, three limitations remain. First, anomaly detection and RUL estimation are typically reported as independent metrics. Most papers either report ROC-AUC for anomaly flags or RMSE for RUL prediction, but not both as part of a single decision pipeline that a maintenance operator could deploy. Second, the canonical RMSE on the test\textsubscript{last} window~\citep{li2018remaining} averages over a flat region of high-RUL ``healthy'' samples (capped at 125\,cycles) and a much smaller critical region (RUL\,$\le$\,30): a small RMSE on this aggregate metric does not imply small error in the operationally meaningful zone. Third, the few systems that combine an anomaly detector with a regressor (e.g., trigger the regressor only after a flag) report ``conditional'' metrics evaluated on a non-stationary subset that is incomparable with the canonical test\textsubscript{last} metric, leading to unintentional metric leakage.
 
 \subsection{Contributions}\label{sec:contribs}
 
 This work proposes and evaluates a hierarchical anomaly-to-RUL system that explicitly addresses these three issues:
 {\sloppy
 \begin{enumerate}
-    \item A Conv1D-VAE that preserves temporal structure and produces a calibrated reconstruction error on a held-out healthy set, used as a quantified gate with a persistence rule (Section~\ref{sec:method-vae}).
+    \item A \emph{detector-agnostic} hierarchical gating layer that turns any window-level anomaly scorer into a quantified trigger with a calibrated threshold and a persistence rule; we instantiate it with a Conv1D-VAE that preserves temporal structure and show it is competitive with classical unsupervised detectors while additionally providing a latent degradation representation (Section~\ref{sec:method-vae}, Table~\ref{tab:detbaselines}).
     \item A formal definition of system-level metrics: systemic true positive rate ($\mathrm{TPR}_{\mathrm{sys}}$), systemic false alarm rate ($\mathrm{FAR}_{\mathrm{sys}}$), lead time (cycles between trigger and failure), and \emph{RMSE@critical} (RMSE evaluated only on windows with RUL\,$\le$\,30) which is comparable across models and datasets (Section~\ref{sec:method-metrics}).
-    \item A complete reproducible pipeline with deterministic algorithms, $N_{\mathrm{seeds}}{=}10$ runs, bootstrap 95\,\% CIs, paired Wilcoxon tests and a run-log JSON with SHA-256 hashes (Section~\ref{sec:exp-repro}).
+    \item A complete reproducible pipeline with deterministic training algorithms (MC Dropout inference remains stochastic by design), $N_{\mathrm{seeds}}{=}10$ runs, bootstrap 95\,\% CIs, paired Wilcoxon tests and a run-log JSON with SHA-256 hashes covering model weights, data splits, configuration and aggregated metrics (Section~\ref{sec:exp-repro}).
     \item An ablation over threshold percentiles ($\tau\in\{P_{85},\ldots,P_{99}\}$), persistence values ($p\in\{1,2,3,5\}$) and VAE architecture (FC vs.\ Conv1D) that quantifies the operational trade-off and reveals $\tau{=}P_{99}$ as optimal across all four datasets (Section~\ref{sec:results-ablation}).
 \end{enumerate}
 }
@@ -90,7 +90,7 @@ The Remaining Useful Life (RUL) is the number of operating cycles between the cu
 
 \subsection{Piecewise linear RUL target}\label{sec:problem-target}
 
-Following the standard practice~\citep{heimes2008recurrent,li2018remaining}, the target RUL is capped at \texttt{RUL\textsubscript{max}}\,=\,125\,cycles, yielding a piecewise function with a constant healthy stage and a linearly descending stage. This convention reflects the physical assumption that the engine operates in nominal regime until a breakpoint after which degradation becomes apparent~\citep{costa2022rve}.
+Following the standard practice~\citep{heimes2008recurrent,li2018remaining}, the target RUL is capped at \texttt{RUL\textsubscript{max}}\,=\,125\,cycles, yielding a piecewise function with a constant healthy stage and a linearly descending stage. This convention reflects the physical assumption that the engine operates in nominal regime until a breakpoint after which degradation becomes apparent~\citep{costa2022rve}. Because the cap collapses all early-life targets to a constant value, the healthy stage used to train the VAE (Section~\ref{sec:method-vae}) coincides with this flat region; the sensitivity of the system to this assumption is discussed in Section~\ref{sec:limitations}.
 
 \subsection{Datasets}\label{sec:problem-data}
 
@@ -104,8 +104,8 @@ The C-MAPSS benchmark contains four sub-datasets that differ in the number of op
 \toprule
 & FD001 & FD002 & FD003 & FD004 \\
 \midrule
-Train trajectories & 100 & 260 & 100 & 248 \\
-Test trajectories  & 100 & 259 & 100 & 249 \\
+Train trajectories & 100 & 260 & 100 & 249 \\
+Test trajectories  & 100 & 259 & 100 & 248 \\
 Operating regimes  &   1 &   6 &   1 &   6 \\
 Fault modes        &   1 &   1 &   2 &   2 \\
 \bottomrule
@@ -123,9 +123,9 @@ S = \sum_{i=1}^{N} s_i,\quad s_i &=
 \mathrm{e}^{\;d_i/10}-1, & d_i\ge 0,
 \end{cases}\label{eq:nasa}
 \end{align}
-with $d_i=\hat r_i-r_i$.
+with $d_i=\hat r_i-r_i$ and $N$ the number of evaluated windows.
 
-\paragraph{Critical-zone metric.} As discussed in Section~\ref{sec:limits}, the trajectory-wide RMSE averages a large healthy region with a small critical region. We therefore introduce the \emph{RMSE@critical}, computed over all sliding windows of the test trajectory whose ground-truth RUL is at or below a critical threshold $\rho_{\mathrm{crit}}=30$\,cycles:
+\paragraph{Critical-zone metric.} As discussed in Section~\ref{sec:limits}, the test\textsubscript{last} RMSE averages a large healthy region with a small critical region. We therefore introduce the \emph{RMSE@critical}, computed over all sliding windows of the test trajectory whose ground-truth RUL is at or below a critical threshold $\rho_{\mathrm{crit}}=30$\,cycles:
 \begin{equation}
 \mathrm{RMSE@critical} = \sqrt{\frac{1}{|\mathcal{C}|}\sum_{i\in\mathcal{C}}(\hat r_i-r_i)^2},
 \label{eq:rmsecrit}
@@ -136,7 +136,7 @@ with $\mathcal{C} = \{i:r_i\le \rho_{\mathrm{crit}}\}$. This metric is comparabl
 \begin{itemize}
     \item Lead time: $\Delta_u = T_u - t^\star_u$, where $T_u$ is the last observed cycle of $u$.
     \item Systemic TPR: fraction of engines with $\min_t r^{(u)}_t\le\rho_{\mathrm{crit}}$ (critical) that are triggered before crossing the critical threshold.
-    \item Systemic FAR: fraction of engines with $\min_t r^{(u)}_t > \rho_{\mathrm{crit}}$ (healthy) that are nevertheless triggered.
+    \item Systemic FAR: fraction of engines whose truncated trajectory never enters the critical zone ($\min_t r^{(u)}_t > \rho_{\mathrm{crit}}$, i.e.\ operationally healthy) that are nevertheless triggered. By construction, an early but persistent warning on an engine that does reach the critical zone is scored as a true positive, not a false alarm.
 \end{itemize}
 
 \paragraph{Uncertainty calibration.} For the MC Dropout estimates we report PICP@95\,\% (the empirical coverage of the predictive interval $\hat\mu\pm 1.96\hat\sigma$), MPIW (mean prediction interval width), Negative Log-Likelihood under a Gaussian assumption and Expected Calibration Error~\citep{guo2017calibration} computed on $n_{\mathrm{bins}}=10$ confidence levels.
@@ -216,9 +216,11 @@ The proposed system is composed of three stages, depicted in Fig.~\ref{fig:pipel
 \node[note, below=0.1cm of trf]   {\S5.2};
 
 \end{tikzpicture}
-\caption{System pipeline: a Conv1D-VAE trained only on healthy data acts as a quantified gate; a Transformer with MC Dropout produces the RUL estimate when the VAE triggers. Lead time, $\mathrm{TPR}_{\mathrm{sys}}$ and $\mathrm{FAR}_{\mathrm{sys}}$ are reported jointly with the trajectory-wide and critical-zone RMSE.}
+\caption{System pipeline: a Conv1D-VAE trained only on healthy data acts as a quantified gate; a Transformer with MC Dropout produces the RUL estimate when the VAE triggers. Lead time, $\mathrm{TPR}_{\mathrm{sys}}$ and $\mathrm{FAR}_{\mathrm{sys}}$ are reported jointly with the test\textsubscript{last} and critical-zone RMSE.}
 \label{fig:pipeline}
 \end{figure*}
+
+All system-level metrics (lead time, $\mathrm{TPR}_{\mathrm{sys}}$, $\mathrm{FAR}_{\mathrm{sys}}$ and RMSE@critical) are computed on the full stride-1 test trajectory so that they refer to the same set of windows; the trigger time $t^\star_u$ that defines the lead time is the first cycle satisfying the persistence rule of Section~\ref{sec:method-gating}.
 
 \subsection{Anomaly detection: variational autoencoder}\label{sec:method-vae}
 
@@ -227,7 +229,7 @@ A standard fully-connected VAE flattens each $w\times d$ window into a long vect
 \mathcal{L}_{\mathrm{VAE}} = \mathrm{MSE}(\hat x, x) + \beta\,D_{\mathrm{KL}}\!\left(q_\phi(z\mid x)\,\|\,\mathcal{N}(0,I)\right),
 \label{eq:vae}
 \end{equation}
-with $\beta=0.1$. The VAE is trained only on the first 30\,\% of each training trajectory (assumed healthy), and 20\,\% of these healthy engines are held out and never seen by the encoder; the threshold $\tau$ is calibrated as a percentile of the reconstruction error on this held-out set, eliminating the calibration leakage that would arise if $\tau$ were set on the same data used to fit the encoder.
+with $\beta=0.1$, a value that deliberately favours reconstruction fidelity -- and hence a sharper reconstruction-error signal for gating -- over latent disentanglement. The VAE is trained only on the first 30\,\% of each training trajectory (assumed healthy), and 20\,\% of these healthy engines are held out and never seen by the encoder; the threshold $\tau$ is calibrated as a percentile of the reconstruction error on this held-out set, eliminating the calibration leakage that would arise if $\tau$ were set on the same data used to fit the encoder. A single VAE is trained across all operating regimes -- in contrast to the per-regime scaling of Section~\ref{sec:exp-preproc} -- and the impact of this regime-agnostic design on the multi-regime false-alarm rate is analysed in Section~\ref{sec:limitations}.
 
 \subsection{RUL regression baselines}\label{sec:method-rul}
 
@@ -241,11 +243,11 @@ All deep regressors are trained with AdamW, MSE loss, gradient clipping at norm 
 
 \subsection{Epistemic uncertainty: MC Dropout}\label{sec:method-mc}
 
-Following~\citet{gal2016dropout}, we activate dropout at inference time and sample $T=50$ stochastic forward passes per window, yielding the predictive mean $\hat\mu$ and standard deviation $\hat\sigma$. The interval $\hat\mu \pm 1.96\hat\sigma$ is the 95\,\% predictive band reported in Tables~\ref{tab:rul} and~\ref{tab:mc-cal}.
+Following~\citet{gal2016dropout}, we activate dropout at inference time and sample $T=50$ stochastic forward passes per window, yielding the predictive mean $\hat\mu$ and standard deviation $\hat\sigma$. The interval $\hat\mu \pm 1.96\hat\sigma$ is the 95\,\% predictive band reported in Tables~\ref{tab:rul} and~\ref{tab:mc-cal}. On a single GPU the $T{=}50$ MC Dropout inference costs 0.3--1.7\,ms per window, well within real-time monitoring budgets.
 
 \subsection{Hierarchical gating}\label{sec:method-gating}
 
-The gating logic is an explicit decision layer on top of the components described above. For each engine $u$ in the test set, we consider the full sliding-window trajectory (stride one). The reconstruction-error vector $\{e_t^{(u)}\}_{t=1}^{T_u}$ is thresholded against $\tau$ to produce a flag stream. A trigger is declared at the first cycle $t^\star_u$ such that the flag is high for at least $p$ consecutive windows. The persistence parameter $p$ filters out spurious flags and trades trigger rate against lead time.
+The gating logic is an explicit decision layer on top of the components described above. For each engine $u$ in the test set, we consider the full sliding-window trajectory (stride one). The reconstruction-error vector $\{e_t^{(u)}\}_{t=1}^{T_u}$ is thresholded against $\tau$ to produce a flag stream. A trigger is declared at the first cycle $t^\star_u$ such that the flag is high for at least $p$ consecutive windows. The persistence parameter $p$ filters out spurious flags and trades trigger rate against lead time. Because consecutive stride-1 windows overlap by $w-1$ cycles, $p$ acts as a temporal denoising filter rather than a sequence of statistically independent confirmations.
 
 We deliberately separate two metrics that are sometimes confused in the literature:
 \begin{itemize}
@@ -299,9 +301,44 @@ Dataset & Arch.\ & ROC-AUC & PR-AUC & TPR@$\tau$ & FAR@$\tau$ \\
 \end{tabular}
 \end{table}
 
+To place the Conv1D-VAE in context, Table~\ref{tab:detbaselines} compares it against three classical unsupervised detectors fitted on the same healthy windows -- Mahalanobis distance (Ledoit--Wolf covariance), a one-class SVM and an Isolation Forest -- on the identical task (positive: windows with RUL\,$\le$\,30 over the full test trajectory). The Conv1D-VAE is \emph{competitive but not systematically superior}: the one-class SVM and Isolation Forest match or slightly exceed it in ROC-AUC on FD001 and FD003, the VAE and the one-class SVM are tied on FD002, and the Mahalanobis distance edges it out on FD004. We nonetheless adopt the Conv1D-VAE as the default detector for two reasons beyond raw detection accuracy: it yields a structured latent representation that exposes the degradation manifold (Section~\ref{sec:results-attribution}) and it integrates naturally with the Monte-Carlo-Dropout uncertainty pipeline. Crucially, the hierarchical gating layer that constitutes the main contribution of this paper is \emph{detector-agnostic}: any of these scorers can be plugged in without changing the system-level metric definitions, and the near-equivalent ROC-AUC values indicate that the operational results are not an artefact of the specific detector chosen.
+
+\begin{table}[!t]
+\centering
+\caption{Detection performance vs.\ classical unsupervised baselines (positive: RUL\,$\le$\,30 over the full test trajectory). Best per dataset in bold.}
+\label{tab:detbaselines}
+\small
+\begin{tabular}{llcc}
+\toprule
+Dataset & Detector & ROC-AUC & PR-AUC \\
+\midrule
+\multirow{4}{*}{FD001}
+ & Mahalanobis        & 0.913          & 0.403 \\
+ & One-class SVM      & \textbf{0.970} & \textbf{0.637} \\
+ & Isolation Forest   & \textbf{0.970} & 0.608 \\
+ & Conv1D-VAE (ours)  & 0.945          & 0.536 \\
+\multirow{4}{*}{FD002}
+ & Mahalanobis        & 0.958          & 0.548 \\
+ & One-class SVM      & \textbf{0.972} & \textbf{0.710} \\
+ & Isolation Forest   & 0.965          & 0.669 \\
+ & Conv1D-VAE (ours)  & \textbf{0.972} & 0.700 \\
+\multirow{4}{*}{FD003}
+ & Mahalanobis        & 0.912          & 0.485 \\
+ & One-class SVM      & \textbf{0.980} & 0.643 \\
+ & Isolation Forest   & \textbf{0.980} & 0.603 \\
+ & Conv1D-VAE (ours)  & 0.971          & \textbf{0.661} \\
+\multirow{4}{*}{FD004}
+ & Mahalanobis        & \textbf{0.968} & \textbf{0.496} \\
+ & One-class SVM      & 0.954          & 0.409 \\
+ & Isolation Forest   & 0.963          & 0.417 \\
+ & Conv1D-VAE (ours)  & 0.945          & 0.423 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \subsection{RUL regression}\label{sec:results-rul}
 
-Table~\ref{tab:rul} reports the trajectory-wide RMSE, the NASA score and the RMSE@critical for the three regressors. The single-seed Random Forest provides the interpretable baseline. CNN+LSTM and Transformer are the deep regressors; their results are mean and 95\,\% bootstrap CI over 10 seeds.
+Table~\ref{tab:rul} reports the test\textsubscript{last} RMSE, the NASA score and the RMSE@critical for the three regressors. The single-seed Random Forest provides the interpretable baseline. CNN+LSTM and Transformer are the deep regressors; their results are mean and 95\,\% bootstrap CI over 10 seeds.
 
 \begin{table*}[!t]
 \centering
@@ -332,49 +369,64 @@ Dataset & Model & RMSE & NASA & RMSE@critical \\
 \end{tabular}
 \end{table*}
 
-The RMSE@critical is consistently 4\,$\times$ to 7\,$\times$ smaller than the trajectory-wide RMSE: the deep regressors are precise where it matters even when the global RMSE remains in the 13--17\,cycle range. Pairwise Wilcoxon signed-rank tests on the per-seed RMSE and NASA values (Table~\ref{tab:wilcoxon}) confirm that the Transformer does not uniformly dominate the CNN+LSTM. CNN+LSTM is significantly better on FD001 ($p{=}0.0020$) and FD004 ($p{=}0.0371$); Transformer is significantly better on FD003 ($p{=}0.0020$); the two are statistically indistinguishable on FD002. This complementarity supports per-dataset model selection or ensembling as a future direction.
+The RMSE@critical (5.4--10.1\,cycles) is numerically smaller than the test\textsubscript{last} RMSE, but the two are not directly comparable: they are evaluated on different window sets and therefore on different RUL distributions, since the critical zone excludes the large capped healthy region. We therefore read RMSE@critical as an absolute error in the maintenance-relevant zone rather than as an improvement over the global figure. Within this zone the deep regressors are consistently better than the Random Forest baseline (e.g.\ 5.60 vs.\ 6.68\,cycles on FD001), which justifies their additional complexity. Pairwise Wilcoxon signed-rank tests on the per-seed RMSE and NASA values (Table~\ref{tab:wilcoxon}) confirm that the Transformer does not uniformly dominate the CNN+LSTM. After Holm--Bonferroni correction for the four simultaneous comparisons, CNN+LSTM remains significantly better on FD001 (adjusted $p{=}0.008$, $d_z{=}-1.19$) and the Transformer on FD003 (adjusted $p{=}0.008$, $d_z{=}+2.15$); the nominal CNN+LSTM advantage on FD004 does \emph{not} survive correction (adjusted $p{=}0.074$), and the two models are statistically indistinguishable on FD002. This complementarity supports per-dataset model selection or ensembling as a future direction.
 
 \begin{table}[!t]
 \centering
-\caption{Paired Wilcoxon signed-rank test (two-sided) on per-seed RMSE, $N_{\mathrm{seeds}}{=}10$.}
+\caption{Paired Wilcoxon signed-rank test (two-sided) on per-seed RMSE, $N_{\mathrm{seeds}}{=}10$. $p_{\mathrm{Holm}}$ is the Holm--Bonferroni-adjusted $p$-value across the four datasets; $d_z$ is the paired effect size (Cohen's $d_z$). Significance uses $p_{\mathrm{Holm}}$.}
 \label{tab:wilcoxon}
 \small
-\begin{tabular}{lccccl}
+\begin{tabular}{lcccccl}
 \toprule
-Dataset & RMSE C+L & RMSE Trf & $\Delta$RMSE & $p$ & Sig.\ \\
+Dataset & RMSE C+L & RMSE Trf & $\Delta$RMSE & $p$ & $p_{\mathrm{Holm}}$ & $d_z$ \\
 \midrule
-FD001 & 13.58 & 14.28 & $+0.70$ & 0.0020 & ** \\
-FD002 & 14.08 & 14.01 & $-0.07$ & 0.3750 & ns \\
-FD003 & 15.30 & 14.05 & $-1.25$ & 0.0020 & ** \\
-FD004 & 16.44 & 17.14 & $+0.71$ & 0.0371 & *  \\
+FD001 & 13.58 & 14.28 & $+0.70$ & 0.0020 & 0.0078\,** & $-1.19$ \\
+FD002 & 14.08 & 14.01 & $-0.07$ & 0.3750 & 0.3750\,ns & $+0.10$ \\
+FD003 & 15.30 & 14.05 & $-1.25$ & 0.0020 & 0.0078\,** & $+2.15$ \\
+FD004 & 16.44 & 17.14 & $+0.71$ & 0.0371 & 0.0742\,ns & $-0.93$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \subsection{Uncertainty calibration}\label{sec:results-mc}
 
-Table~\ref{tab:mc-cal} reports the calibration metrics for the Transformer with $T{=}50$ MC Dropout passes. PICP is close to the nominal 95\,\% target on the single-regime datasets (91.0\,\% on FD001 and 90.0\,\% on FD003) and ECE is below 0.06; on the multi-regime datasets the model is under-confident (PICP 78.8\,\% on FD002, 74.6\,\% on FD004) and ECE rises to 0.11--0.14. Post-hoc recalibration (Platt scaling or isotonic regression) on a held-out validation set is left as immediate future work.
+Table~\ref{tab:mc-cal} reports the raw calibration metrics for the Transformer with $T{=}50$ MC Dropout passes. PICP is close to the nominal 95\,\% target on the single-regime datasets (89.0\,\% on FD001 and 86.0\,\% on FD003) with ECE below 0.06; on the multi-regime datasets the model is over-confident -- the predictive intervals are too narrow and under-cover the true RUL (PICP 74.5\,\% on FD002 and 74.2\,\% on FD004, well below the 95\,\% nominal level) -- with ECE of 0.11--0.12. We therefore apply a post-hoc recalibration that rescales the predictive standard deviation $\hat\sigma$ by a single scalar factor $s$ fitted on the validation set so that the validation PICP matches the 95\,\% nominal level. This restores test coverage to 90--95\,\% on the multi-regime datasets (FD002: 74.5\,\%\,$\rightarrow$\,95.4\,\% with $s{=}1.90$; FD004: 74.2\,\%\,$\rightarrow$\,89.9\,\% with $s{=}1.55$) and lowers ECE below 0.07 (Table~\ref{tab:recal}), at the expected cost of wider intervals. The $\pm 2\hat\sigma$ bands shown in Fig.~\ref{fig:attribution} use the recalibrated $\hat\sigma$.
 
 \begin{table}[!t]
 \centering
-\caption{MC Dropout calibration of the Transformer ($T{=}50$).}
+\caption{MC Dropout calibration of the Transformer ($T{=}50$), raw (before recalibration).}
 \label{tab:mc-cal}
 \small
 \begin{tabular}{lcccc}
 \toprule
 Dataset & PICP@95\,\% & MPIW & NLL & ECE \\
 \midrule
-FD001 & 91.0\,\% & 41.2 & 3.94 & 0.051 \\
-FD002 & 78.8\,\% & 35.0 & 4.21 & 0.106 \\
-FD003 & 90.0\,\% & 41.7 & 3.93 & 0.039 \\
-FD004 & 74.6\,\% & 43.4 & 4.98 & 0.135 \\
+FD001 & 89.0\,\% & 41.5 & 4.09 & 0.057 \\
+FD002 & 74.5\,\% & 35.0 & 4.40 & 0.108 \\
+FD003 & 86.0\,\% & 43.1 & 4.02 & 0.055 \\
+FD004 & 74.2\,\% & 44.0 & 5.13 & 0.123 \\
+\bottomrule
+\end{tabular}
+
+\vspace{4pt}
+\caption{Post-hoc recalibration of the Transformer's predictive $\hat\sigma$ by a scalar $s$ fitted on validation (target PICP\,$=$\,95\,\%): test PICP and ECE before vs.\ after.}
+\label{tab:recal}
+\small
+\begin{tabular}{lccccc}
+\toprule
+Dataset & $s$ & PICP$_{\mathrm{raw}}$ & PICP$_{\mathrm{recal}}$ & ECE$_{\mathrm{raw}}$ & ECE$_{\mathrm{recal}}$ \\
+\midrule
+FD001 & 1.40 & 89.0\,\% & 95.0\,\% & 0.057 & 0.048 \\
+FD002 & 1.90 & 74.5\,\% & 95.4\,\% & 0.108 & 0.073 \\
+FD003 & 1.35 & 86.0\,\% & 92.0\,\% & 0.055 & 0.044 \\
+FD004 & 1.55 & 74.2\,\% & 89.9\,\% & 0.123 & 0.035 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \subsection{Hierarchical gating: ablation and selected configuration}\label{sec:results-ablation}
 
-The system was evaluated under the full Cartesian product of $\tau\in\{P_{85},P_{90},P_{95},P_{97},P_{99}\}$, $p\in\{1,2,3,5\}$ and VAE architecture $\in\{\text{FC},\text{Conv1D}\}$, yielding 40 configurations per dataset. The configuration that maximises TPR\textsubscript{sys}\,$-$\,FAR\textsubscript{sys} is reported in Table~\ref{tab:gating-best}. The 99\textsuperscript{th} percentile of the held-out healthy reconstruction error is consistently the optimal threshold across all four sub-datasets, while the persistence parameter ranges from 1 to 5 according to the noise level of each dataset. The Conv1D-VAE wins in three of four cases, confirming the qualitative gain reported in Section~\ref{sec:results-vae}.
+The system was evaluated under the full Cartesian product of $\tau\in\{P_{85},P_{90},P_{95},P_{97},P_{99}\}$, $p\in\{1,2,3,5\}$ and VAE architecture $\in\{\text{FC},\text{Conv1D}\}$, yielding 40 configurations per dataset. The configuration that maximises TPR\textsubscript{sys}\,$-$\,FAR\textsubscript{sys} is reported in Table~\ref{tab:gating-best}. The 99\textsuperscript{th} percentile of the held-out healthy reconstruction error is consistently the optimal threshold across all four sub-datasets, while the persistence parameter ranges from 1 to 5 according to the noise level of each dataset. We note that the $\mathrm{TPR}_{\mathrm{sys}}-\mathrm{FAR}_{\mathrm{sys}}$ criterion weights missed detections and false alarms equally; an aviation deployment would instead impose an asymmetric cost or a hard constraint (e.g.\ $\mathrm{FAR}_{\mathrm{sys}}<5\,\%$), under which the multi-regime operating points reported here would require the regime-conditional gate discussed in Section~\ref{sec:limitations}. The Conv1D-VAE wins in three of four cases, confirming the qualitative gain reported in Section~\ref{sec:results-vae}.
 
 \begin{table}[!t]
 \centering
@@ -416,7 +468,7 @@ FD004 & 55.8 & 94.3\,\%  & 18.84 & 17.14 \\
 
 \subsection{Comparison with the state of the art}\label{sec:results-sota}
 
-Table~\ref{tab:sota} compares the trajectory-wide RMSE of our best model with eight published approaches that follow the same test\textsubscript{last} protocol on C-MAPSS. Our best model is below the SOTA on the single-regime datasets (gap of $+2.54$ on FD001 and $+2.67$ on FD003) but \emph{beats} the SOTA on the multi-regime datasets (gap of $-1.77$ on FD002 against the dual-attention Transformer of~\citet{liu2023dual} and $-0.51$ on FD004 against the hybrid CNN-LSTM-Attention of~\citet{wang2024hybrid}).
+Table~\ref{tab:sota} compares the test\textsubscript{last} RMSE of our best model with eight published approaches that follow the same test\textsubscript{last} protocol on C-MAPSS. Our best \emph{per-dataset} regressor -- the Transformer on FD002 and the CNN+LSTM on FD004 -- is below the SOTA on the single-regime datasets (gap of $+2.54$ on FD001 and $+2.67$ on FD003) but improves on it on the multi-regime datasets (gap of $-1.77$ on FD002 against the dual-attention Transformer of~\citet{liu2023dual} and $-0.51$ on FD004 against the hybrid CNN-LSTM-Attention of~\citet{wang2024hybrid}). These figures reflect the strength of the individual regressors, not of the gating layer, which leaves the test\textsubscript{last} RMSE unchanged; they are reported only to show that the regressors orchestrated by the gate remain competitive on the hardest datasets.
 
 The contribution of this paper is therefore not to claim a new RMSE record on the easy datasets, but to provide an operationally meaningful gating layer with quantified lead time and false-alarm rate, while remaining competitive in raw RMSE on the multi-regime datasets where the difficulty is highest.
 
@@ -470,17 +522,17 @@ Three observations follow. First, the temperature sensors T50 (s4), T30 (s3) and
 %% =====================================================================
 \section{Concluding remarks and future work}\label{sec:conclusions}
 
-We have proposed a hierarchical anomaly-to-RUL system that combines a Conv1D variational autoencoder, a critical-zone metric (RMSE@critical), and a quantified gating layer with system-level metrics (lead time, TPR\textsubscript{sys}, FAR\textsubscript{sys}). Evaluated on the four C-MAPSS sub-datasets with $N_{\mathrm{seeds}}{=}10$ deterministic runs, 95\,\% bootstrap CIs and paired Wilcoxon tests, the system delivers 33--56\,cycles of mean lead time with a critical-zone TPR of 80--100\,\%, and a critical-zone RMSE of 5.4--10.1\,cycles, four to seven times lower than the trajectory-wide RMSE. The system beats the published state of the art on the multi-regime datasets FD002 and FD004 in trajectory-wide RMSE while matching the SOTA in the multi-regime critical-zone metric.
+We have proposed a hierarchical anomaly-to-RUL system that combines a Conv1D variational autoencoder, a critical-zone metric (RMSE@critical), and a quantified gating layer with system-level metrics (lead time, TPR\textsubscript{sys}, FAR\textsubscript{sys}). Evaluated on the four C-MAPSS sub-datasets with $N_{\mathrm{seeds}}{=}10$ deterministic runs, 95\,\% bootstrap CIs and paired Wilcoxon tests, the system delivers 33--56\,cycles of mean lead time with a critical-zone TPR of 80--100\,\%, and an absolute critical-zone RMSE of 5.4--10.1\,cycles. On the two multi-regime datasets (FD002, FD004) the best per-dataset regressor orchestrated by the gate (Transformer and CNN+LSTM respectively) matches or improves on the published test\textsubscript{last} RMSE; this reflects the strength of the individual regressors rather than of the gating layer, whose contribution is the quantified operational signal (lead time, $\mathrm{TPR}_{\mathrm{sys}}$, $\mathrm{FAR}_{\mathrm{sys}}$) and not the raw RMSE.
 
 \subsection{Limitations}\label{sec:limitations}
 
 Three limitations should be discussed openly.
 
-(i)~A Cox-based DeepSurv variant was originally included in the pipeline but was found to learn the survival ranking inversely on three of the four datasets, with a test C-index that did not improve after fixing the sign convention, normalising the engineered features and adding gradient clipping. The root cause appears to be a design decision of the underlying feature representation (last-window engineered features carry little information about full lifetime), and we therefore exclude DeepSurv from the reported pipeline and leave its redesign with a Breslow estimator and multi-window features for future work.
+(i)~An exploratory Cox-based DeepSurv variant was evaluated during development but is \emph{not part of the proposed system}: with last-window engineered features it did not produce a useful survival ranking, which we attribute to those features carrying little information about full lifetime. It is mentioned here only for completeness and transparency; a redesign with a Breslow estimator and multi-window features is a possible future extension rather than a limitation of the system reported in this paper.
 
 (ii)~The systemic FAR is 17--23\,\% on the multi-regime datasets. This is acceptable for an alarm-with-confirmation deployment but high for fully automated decisions. A regime-conditional VAE (one threshold per regime) is the most likely route to reduce it.
 
-(iii)~The MC Dropout coverage degrades on FD002 and FD004 (PICP\,$\le$\,80\,\%, ECE\,$\ge$\,0.11). Post-hoc recalibration (Platt scaling, isotonic regression) on a held-out validation set is the standard remedy and is left for the next iteration.
+(iii)~The raw MC Dropout coverage degrades on FD002 and FD004 (PICP\,$\le$\,75\,\%, ECE\,$\ge$\,0.11). This is addressed by the post-hoc $\hat\sigma$-scaling of Section~\ref{sec:results-mc}, which restores PICP to 90--95\,\% and lowers ECE below 0.07 (Table~\ref{tab:recal}); a per-regime recalibration that avoids the single-factor compromise on multi-regime data remains for future work.
 
 \subsection{Future work}\label{sec:futurework}
 
@@ -500,7 +552,7 @@ The authors declare that they have no known competing financial interests or per
 
 \section*{Data and code availability}
 
-The C-MAPSS dataset is publicly available from the NASA Prognostics Data Repository~\citep{saxena2008damage}. The pipeline source code, deterministic seeds, run logs and SHA-256 hashes used to produce every table and figure of this paper are released at the project repository. Conventions on sliding-window construction, regime clustering and piecewise RUL labelling were cross-checked against open-source community baselines~\citep{panara_cmapss_repo,mohyunho_ncmapss_repo} to ensure that the reported numbers follow the canonical C-MAPSS protocol and remain comparable with the state of the art.
+The C-MAPSS dataset is publicly available from the NASA Prognostics Data Repository~\citep{saxena2008damage}. The pipeline source code, deterministic seeds, run logs and SHA-256 hashes used to produce every table and figure of this paper are released at the project repository \url{https://github.com/rafapecino/TFM-AeroEngine-Anomaly-RUL-VAE-TFT} (SHA-256 of the run log: \texttt{779ae745dd49}). Conventions on sliding-window construction, regime clustering and piecewise RUL labelling were cross-checked against open-source community baselines~\citep{panara_cmapss_repo,mohyunho_ncmapss_repo} to ensure that the reported numbers follow the canonical C-MAPSS protocol and remain comparable with the state of the art.
 
 \section*{Acknowledgements}
 
