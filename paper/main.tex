@@ -201,15 +201,14 @@ The proposed system is composed of three stages, depicted in Fig.~\ref{fig:pipel
 
 %% --- Metrics banner ---
 \node[draw, dashed, rounded corners=2pt, fill=gray!5,
-      below=0.7cm of gate, xshift=1.5cm,
+      below=1.25cm of gate, xshift=1.5cm,
       minimum width=8.0cm, minimum height=0.65cm, align=center,
       font=\small]
       (metrics) {System metrics:\quad Lead time $\cdot$
                  $\mathrm{TPR}_{\mathrm{sys}}$ $\cdot$
                  $\mathrm{FAR}_{\mathrm{sys}}$ $\cdot$ RMSE@critical};
 
-\draw[arr, dashed, gray] (out.south)  |- (metrics.east);
-\draw[arr, dashed, gray] (idle.south) |- (metrics.west);
+%% (the gated branches -- RUL output and ``no alarm'' -- feed the system metrics summarised below)
 
 %% --- Stage labels ---
 \node[note, below=0.1cm of data]  {\S3};
