@@ -148,11 +148,13 @@ A persistent warning on an engine that does reach the critical zone is scored as
 \subsection{Pipeline overview}\label{sec:method-pipeline}
 
 The proposed system is composed of three stages, depicted in Fig.~\ref{fig:pipeline}:
+\begin{sloppypar}
 \begin{enumerate}
     \item \emph{Preprocessing}: regime clustering with KMeans on the operating-condition signals (only fitted on the train split), per-regime min--max scaling and piecewise-linear RUL labelling with cap 125 (Section~\ref{sec:exp-preproc}).
     \item \emph{Anomaly detection}: a Conv1D-VAE trained exclusively on the first 30\,\% of each training trajectory (the ``healthy stage'') with a held-out subset of healthy engines reserved for threshold calibration.
     \item \emph{RUL regression with hierarchical gating}: when the VAE flags an engine, a Transformer (or alternatively a CNN+LSTM) regressor predicts the RUL, and the prediction is enriched with a $\pm 2\hat\sigma$ MC Dropout band. Before the trigger the system emits no RUL estimate and declares the engine healthy; a RUL value with its uncertainty band is produced only from $t^\star_u$ onward.
 \end{enumerate}
+\end{sloppypar}
 
 \begin{figure*}[!t]
 \centering
@@ -279,6 +281,7 @@ All experiments are run with $\mathrm{SEED}{=}42$. The Python, NumPy, PyTorch an
 \caption{Model hyperparameters. Common to all deep models: window $w{=}30$, RUL cap $125$, batch size $256$, gradient clipping at norm $1.0$, ReduceLROnPlateau (factor $0.5$, patience $4$), MC Dropout $T{=}50$.}
 \label{tab:hyper}
 \small
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{ll}
 \toprule
 Model & Hyperparameters \\
@@ -296,7 +299,8 @@ Transformer & $d_{\mathrm{model}}{=}64$, 4 heads, FF 128, 2 layers, GELU, \\
 Random Forest & 200 trees, max depth 15, min samples leaf 5, \\
               & $7d$ window features (single seed) \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \end{table}
 
 %% =====================================================================
@@ -311,6 +315,7 @@ Table~\ref{tab:vae} reports ROC-AUC and PR-AUC for the FC and Conv1D variants of
 \caption{Window-level anomaly detection. Best in bold per dataset.}
 \label{tab:vae}
 \small
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{llcccc}
 \toprule
 Dataset & Arch.\ & ROC-AUC & PR-AUC & TPR@$\tau$ & FAR@$\tau$ \\
@@ -324,7 +329,8 @@ Dataset & Arch.\ & ROC-AUC & PR-AUC & TPR@$\tau$ & FAR@$\tau$ \\
 \multirow{2}{*}{FD004} & FC      & 0.940          & 0.395          & 84.4\,\%          & 11.5\,\%         \\
                        & Conv1D  & \textbf{0.950} & \textbf{0.433} & \textbf{87.0\,\%} & \textbf{11.4\,\%}\\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \end{table}
 
 To place the Conv1D-VAE in context, Table~\ref{tab:detbaselines} compares it against three classical unsupervised detectors fitted on the same healthy windows -- Mahalanobis distance (Ledoit--Wolf covariance), a one-class SVM and an Isolation Forest -- on the identical task (positive: windows with RUL\,$\le$\,30 over the full test trajectory). The Conv1D-VAE is \emph{competitive but not systematically superior}: the one-class SVM and Isolation Forest match or slightly exceed it in ROC-AUC on FD001 and FD003, the VAE and the one-class SVM are tied on FD002, and the Mahalanobis distance edges it out on FD004. We nonetheless adopt the Conv1D-VAE as the default detector for two reasons beyond raw detection accuracy: it yields a structured latent representation that exposes the degradation manifold (Section~\ref{sec:results-attribution}) and it integrates naturally with the Monte-Carlo-Dropout uncertainty pipeline. Crucially, the hierarchical gating layer that constitutes the main contribution of this paper is \emph{detector-agnostic}: any of these scorers can be plugged in without changing the system-level metric definitions, and the near-equivalent ROC-AUC values indicate that the operational results are not an artefact of the specific detector chosen.
@@ -402,6 +408,7 @@ The RMSE@critical (5.4--10.1\,cycles) is numerically smaller than the test\texts
 \caption{Paired Wilcoxon signed-rank test (two-sided) on per-seed RMSE, $N_{\mathrm{seeds}}{=}10$. $\Delta$RMSE and $d_z$ are both defined as Transformer minus CNN+LSTM, so a \emph{positive} value favours CNN+LSTM (lower RMSE). $p_{\mathrm{Holm}}$ is the Holm--Bonferroni-adjusted $p$-value across the four datasets; significance uses $p_{\mathrm{Holm}}$.}
 \label{tab:wilcoxon}
 \small
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{lcccccl}
 \toprule
 Dataset & RMSE C+L & RMSE Trf & $\Delta$RMSE & $p$ & $p_{\mathrm{Holm}}$ & $d_z$ \\
@@ -411,7 +418,8 @@ FD002 & 14.08 & 14.01 & $-0.07$ & 0.3750 & 0.3750\,ns & $-0.10$ \\
 FD003 & 15.30 & 14.05 & $-1.25$ & 0.0020 & 0.0078\,** & $-2.15$ \\
 FD004 & 16.44 & 17.14 & $+0.71$ & 0.0371 & 0.0742\,ns & $+0.93$ \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \end{table}
 
 \subsection{Uncertainty calibration}\label{sec:results-mc}
@@ -499,6 +507,7 @@ FD004 & 55.8 & 94.3\,\%  & 18.84 & 17.14 \\
 \caption{Critical-zone RMSE of the Transformer evaluated over all critical windows vs.\ only the post-trigger critical windows of the system (best configuration per dataset). Coverage is the fraction of critical windows captured after the trigger. Both columns use the single deployed model over the full test trajectory; the small difference with the RMSE@critical of Table~\ref{tab:rul} reflects that the latter is the mean over the ten seeds.}
 \label{tab:m8}
 \small
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{lccc}
 \toprule
 Dataset & Coverage & RMSE@crit (all) & RMSE@crit (post-trigger) \\
@@ -508,7 +517,8 @@ FD002 & 94.4\,\% & 7.50 & \textbf{6.92} \\
 FD003 & 82.8\,\% & 5.18 & \textbf{4.20} \\
 FD004 & 82.9\,\% & 11.55 & \textbf{7.93} \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \end{table}
 
 \paragraph{Sensitivity to the healthy-fraction assumption.} The VAE is trained on the first 30\,\% of each trajectory, assumed healthy. To check that this choice is not a hidden source of leakage or fragility, we retrained the Conv1D-VAE using 20\,\%, 30\,\% and 40\,\% of each trajectory and re-evaluated the gate ($\tau{=}P_{99}$, persistence~2). The system-level metrics are stable across 20--30\,\% (Table~\ref{tab:c5}); only at 40\,\% does the true-positive rate drop on the single-regime datasets (e.g.\ FD001 $80\rightarrow64\,\%$), as expected when degraded windows begin to leak into the ``healthy'' training set. The 30\,\% convention is thus a safe operating point rather than a tuned value.
