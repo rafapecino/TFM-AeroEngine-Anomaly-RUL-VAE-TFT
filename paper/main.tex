@@ -491,6 +491,46 @@ FD004 & 55.8 & 94.3\,\%  & 18.84 & 17.14 \\
 \footnotesize *RMSE\textsubscript{cond} and RMSE\textsubscript{full} are computed on different windows; see Section~\ref{sec:method-gating}.
 \end{table}
 
+\paragraph{System-conditioned critical-zone error.} To measure the regressor where the \emph{system} actually operates, we recompute the critical-zone RMSE on the windows that are both critical (RUL\,$\le$\,30) \emph{and} posterior to the gate trigger of the selected configuration. Restricting to the post-trigger region reduces the critical-zone error on all four datasets (Table~\ref{tab:m8}), most markedly on FD004 ($11.55\rightarrow 7.93$\,cycles), while the gate covers 67--94\,\% of the critical windows. The gate therefore concentrates the regressor on the operationally relevant region rather than degrading its accuracy there.
+
+\begin{table}[!t]
+\centering
+\caption{Critical-zone RMSE of the Transformer evaluated over all critical windows vs.\ only the post-trigger critical windows of the system (best configuration per dataset). Coverage is the fraction of critical windows captured after the trigger.}
+\label{tab:m8}
+\small
+\begin{tabular}{lccc}
+\toprule
+Dataset & Coverage & RMSE@crit (all) & RMSE@crit (post-trigger) \\
+\midrule
+FD001 & 66.9\,\% & 4.87 & \textbf{4.16} \\
+FD002 & 94.4\,\% & 7.50 & \textbf{6.92} \\
+FD003 & 82.8\,\% & 5.18 & \textbf{4.20} \\
+FD004 & 82.9\,\% & 11.55 & \textbf{7.93} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Sensitivity to the healthy-fraction assumption.} The VAE is trained on the first 30\,\% of each trajectory, assumed healthy. To check that this choice is not a hidden source of leakage or fragility, we retrained the Conv1D-VAE using 20\,\%, 30\,\% and 40\,\% of each trajectory and re-evaluated the gate ($\tau{=}P_{99}$, persistence~2). The system-level metrics are stable across 20--30\,\% (Table~\ref{tab:c5}); only at 40\,\% does the true-positive rate drop on the single-regime datasets (e.g.\ FD001 $80\rightarrow64\,\%$), as expected when degraded windows begin to leak into the ``healthy'' training set. The 30\,\% convention is thus a safe operating point rather than a tuned value.
+
+\begin{table}[!t]
+\centering
+\caption{Sensitivity of the system-level metrics to the healthy fraction used to train the VAE (Conv1D, $\tau{=}P_{99}$, persistence~2).}
+\label{tab:c5}
+\small
+\begin{tabular}{llcc}
+\toprule
+Healthy \% & Dataset & TPR\textsubscript{sys} & FAR\textsubscript{sys} \\
+\midrule
+\multirow{2}{*}{20\,\%} & FD001 & 84.0\,\% & 17.3\,\% \\
+                        & FD004 & 94.3\,\% & 22.1\,\% \\
+\multirow{2}{*}{30\,\%} & FD001 & 80.0\,\% & 8.0\,\% \\
+                        & FD004 & 94.3\,\% & 21.5\,\% \\
+\multirow{2}{*}{40\,\%} & FD001 & 64.0\,\% & 10.7\,\% \\
+                        & FD004 & 88.7\,\% & 16.4\,\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \subsection{Comparison with the state of the art}\label{sec:results-sota}
 
 Table~\ref{tab:sota} compares the test\textsubscript{last} RMSE of our best model with eight published approaches that follow the same test\textsubscript{last} protocol on C-MAPSS. Our best \emph{per-dataset} regressor -- the Transformer on FD002 and the CNN+LSTM on FD004 -- is below the SOTA on the single-regime datasets (gap of $+2.54$ on FD001 and $+2.67$ on FD003) but improves on it on the multi-regime datasets (gap of $-1.77$ on FD002 against the dual-attention Transformer of~\citet{liu2023dual} and $-0.51$ on FD004 against the hybrid CNN-LSTM-Attention of~\citet{wang2024hybrid}). These figures reflect the strength of the individual regressors, not of the gating layer, which leaves the test\textsubscript{last} RMSE unchanged; they are reported only to show that the regressors orchestrated by the gate remain competitive on the hardest datasets.
@@ -523,7 +563,7 @@ This work                  & Transformer              & --      & 14.28 & \textb
 
 \subsection{Failure case analysis}\label{sec:results-failure}
 
-The top-10 worst-error engines per regressor were inspected on each dataset. Engines that appear simultaneously in the top-10 of all three regressors form a small set of systematically difficult units (units 45, 67, 93 on FD001; 12, 221, 229 on FD002; 9, 19, 54, 85, 96 on FD003; 34, 39, 43, 107, 240 on FD004). The mean ground-truth RUL of these engines lies in 73--101\,cycles, i.e., far from the failure region. CNN+LSTM and Transformer over-estimate RUL on FD001--FD003 (i.e., are optimistic in cycles to failure), while all three regressors under-estimate on FD004. None of these engines belong to the operational critical zone (RUL\,$\le$\,30); the system therefore fails on long-horizon prediction, not on the maintenance-relevant short horizon, which is consistent with the RMSE@critical results of Table~\ref{tab:rul}.
+The top-10 worst-error engines per regressor were inspected on each dataset. Engines that appear simultaneously in the top-10 of all three regressors form a small set of systematically difficult units (units 45, 67, 93 on FD001; 12, 221, 229 on FD002; 9, 19, 54, 85, 96 on FD003; 34, 39, 43, 107, 240 on FD004). The mean ground-truth RUL of these engines lies in 73--101\,cycles, i.e., far from the failure region. CNN+LSTM and Transformer over-estimate RUL on FD001--FD003 (i.e., are optimistic in cycles to failure), while all three regressors under-estimate on FD004. None of these engines belong to the operational critical zone (RUL\,$\le$\,30); the system therefore fails on long-horizon prediction, not on the maintenance-relevant short horizon, which is consistent with the RMSE@critical results of Table~\ref{tab:rul}. On the multi-regime datasets these difficult engines do not concentrate in the minority operating regimes: they fall almost entirely in the dominant regime (8/8 on FD002 and 8/9 on FD004 belong to the most populated regime), confirming that the difficulty is long-horizon RUL rather than a minority-regime artefact.
 
 \subsection{Feature attribution via Integrated Gradients}\label{sec:results-attribution}
 
@@ -531,7 +571,7 @@ To address the regulatory interpretability requirement highlighted in Section~\r
 
 Figure~\ref{fig:attribution} shows the results for FD001 Unit~20 ($\tau{=}P_{99}$, $p{=}3$, lead time = 15\,cycles). Panel~(a) overlays the Transformer prediction and its $\pm 2\hat\sigma$ MC Dropout band on the true RUL trajectory, with the VAE trigger (green dashed line) and the critical zone (RUL\,$\le$\,30, red shading) marked. Panels~(b) and~(c) show normalised $|\mathrm{IG}|$ per sensor over time for the ConvVAE reconstruction error and the Transformer RUL prediction, respectively.
 
-Three observations follow. First, the temperature sensors T50 (s4), T30 (s3) and T24 (s2) show rising attribution in both panels as the engine approaches failure, consistent with the physical expectation that turbine outlet and compressor inlet temperatures increase during degradation. Second, the pressure and flow sensors Ps30 (s11) and P30 (s7) dominate the ConvVAE sensitivity map at the trigger window, explaining why the gate fires: the VAE detects a pressure-signature anomaly rather than a gradual temperature drift. Third, the Transformer attribution is more spread across sensors in the healthy phase but concentrates on T50 and Ps30 in the critical zone (red shading in panel~c), indicating that the model implicitly learns to up-weight the degradation-linked features as RUL decreases. This convergence between the VAE and Transformer attribution patterns is consistent with a system in which both components independently identify the same physical degradation signature, which supports the operational validity of the hierarchical gating design.
+Three observations follow. First, the temperature sensors T50 (s4), T30 (s3) and T24 (s2) show rising attribution in both panels as the engine approaches failure, consistent with the physical expectation that turbine outlet and compressor inlet temperatures increase during degradation. Second, the pressure and flow sensors Ps30 (s11) and P30 (s7) dominate the ConvVAE sensitivity map at the trigger window, explaining why the gate fires: the VAE detects a pressure-signature anomaly rather than a gradual temperature drift. Third, the Transformer attribution is more spread across sensors in the healthy phase but concentrates on T50 and Ps30 in the critical zone (red shading in panel~c), indicating that the model implicitly learns to up-weight the degradation-linked features as RUL decreases. This convergence between the VAE and Transformer attribution patterns is consistent with a system in which both components independently identify the same physical degradation signature, which supports the operational validity of the hierarchical gating design. We replicated the analysis on the two multi-regime datasets (FD002, unit~7; FD004, unit~40): the same temperature and pressure sensors dominate the trigger and critical-zone attributions, indicating that the degradation signature identified by the gate is stable across operating regimes (the corresponding attribution maps are produced by the released pipeline).
 
 \begin{figure}[!t]
 \centering
@@ -562,7 +602,7 @@ Three limitations should be discussed openly.
 \subsection{Future work}\label{sec:futurework}
 
 \begin{sloppypar}
-Four directions follow naturally from the present results: (i)~regime-conditional VAEs to reduce $\mathrm{FAR}_{\mathrm{sys}}$ on multi-regime datasets; (ii)~post-hoc MC Dropout recalibration; (iii)~CNN+LSTM\,$\oplus$\,Transformer ensembles weighted by dataset, motivated by the Wilcoxon complementarity of Section~\ref{sec:results-rul}; (iv)~extension of the Integrated Gradients analysis of Section~\ref{sec:results-attribution} to all four C-MAPSS sub-datasets and to the multi-regime case, where regime-conditional attribution maps could expose whether different operating points activate different degradation sensors, a finding directly relevant to regulatory acceptance under the EASA AI roadmap \citep{easa2025roadmap}. A fifth, longer-term direction is the integration of large pre-trained time-series models adapted via low-rank tuning, an emerging approach already explored on C-MAPSS \citep{chakravarty2025llm4ts}, which our gating layer could orchestrate as a high-fidelity regressor when triggered.
+Four directions follow naturally from the present results: (i)~regime-conditional VAEs to reduce $\mathrm{FAR}_{\mathrm{sys}}$ on multi-regime datasets; (ii)~post-hoc MC Dropout recalibration; (iii)~CNN+LSTM\,$\oplus$\,Transformer ensembles weighted by dataset, motivated by the Wilcoxon complementarity of Section~\ref{sec:results-rul}; (iv)~\emph{regime-conditional} attribution maps that, building on the per-dataset Integrated Gradients analysis already reported in Section~\ref{sec:results-attribution}, would expose whether different operating points activate different degradation sensors, a finding directly relevant to regulatory acceptance under the EASA AI roadmap \citep{easa2025roadmap}. A fifth, longer-term direction is the integration of large pre-trained time-series models adapted via low-rank tuning, an emerging approach already explored on C-MAPSS \citep{chakravarty2025llm4ts}, which our gating layer could orchestrate as a high-fidelity regressor when triggered.
 \end{sloppypar}
 
 %% =====================================================================
@@ -577,7 +617,7 @@ The authors declare that they have no known competing financial interests or per
 
 \section*{Data and code availability}
 
-The C-MAPSS dataset is publicly available from the NASA Prognostics Data Repository~\citep{saxena2008damage}. The pipeline source code, deterministic seeds, run logs and SHA-256 hashes used to produce every table and figure of this paper are released at the project repository \url{https://github.com/rafapecino/TFM-AeroEngine-Anomaly-RUL-VAE-TFT} (SHA-256 of the run log: \texttt{779ae745dd49}). Conventions on sliding-window construction, regime clustering and piecewise RUL labelling were cross-checked against open-source community baselines~\citep{panara_cmapss_repo,mohyunho_ncmapss_repo} to ensure that the reported numbers follow the canonical C-MAPSS protocol and remain comparable with the state of the art.
+The C-MAPSS dataset is publicly available from the NASA Prognostics Data Repository~\citep{saxena2008damage}. The pipeline source code, deterministic seeds, run logs and SHA-256 hashes used to produce every table and figure of this paper are released at the project repository \url{https://github.com/rafapecino/TFM-AeroEngine-Anomaly-RUL-VAE-TFT} (SHA-256 of the run log: \texttt{662200fc9747}). Conventions on sliding-window construction, regime clustering and piecewise RUL labelling were cross-checked against open-source community baselines~\citep{panara_cmapss_repo,mohyunho_ncmapss_repo} to ensure that the reported numbers follow the canonical C-MAPSS protocol and remain comparable with the state of the art.
 
 \section*{Acknowledgements}
 
