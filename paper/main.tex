@@ -12,6 +12,7 @@
 \usepackage{xcolor}
 \usepackage{hyperref}
 \usepackage{microtype}
+\usepackage{placeins}
 \usepackage{tikz}
 \usetikzlibrary{shapes.geometric,arrows.meta,positioning,fit,backgrounds}
 
@@ -571,6 +572,7 @@ This work                  & Transformer              & --      & 14.28 & \textb
 \end{tabular}
 \end{table*}
 
+\FloatBarrier
 \subsection{Failure case analysis}\label{sec:results-failure}
 
 The top-10 worst-error engines per regressor were inspected on each dataset. Engines that appear simultaneously in the top-10 of all three regressors form a small set of systematically difficult units (units 45, 67, 93 on FD001; 12, 221, 229 on FD002; 9, 19, 54, 85, 96 on FD003; 34, 39, 43, 107, 240 on FD004). The mean ground-truth RUL of these engines lies in 73--101\,cycles, i.e., far from the failure region. CNN+LSTM and Transformer over-estimate RUL on FD001--FD003 (i.e., are optimistic in cycles to failure), while all three regressors under-estimate on FD004. None of these engines belong to the operational critical zone (RUL\,$\le$\,30); the system therefore fails on long-horizon prediction, not on the maintenance-relevant short horizon, which is consistent with the RMSE@critical results of Table~\ref{tab:rul}. On the multi-regime datasets these difficult engines do not concentrate in the minority operating regimes: they fall almost entirely in the dominant regime (8/8 on FD002 and 8/9 on FD004 belong to the most populated regime), confirming that the difficulty is long-horizon RUL rather than a minority-regime artefact.
